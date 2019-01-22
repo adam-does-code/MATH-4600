@@ -7,7 +7,7 @@ from itertools import count, islice
 # Global variables
 #
 
-GENERATIONS = 5000
+GENERATIONS = 50
 POP_SIZE = 20
 
 def custom_sort(t):
@@ -44,16 +44,8 @@ def fitness(num):
   return fitness
 
 def mutate(num):
-  return num + random.randint(-10, 10)
+  return num + random.randint(-5, 5)
 
-# def crossover(num1, num2):
-#   """
-#   Slices both dna1 and dna2 into two parts at a random index within their
-#   length and merges them. Both keep their initial sublist up to the crossover
-#   index, but their ends are swapped.
-#   """
-#   # pos = int(random.random() * DNA_SIZE)
-#   return (dna1[:pos]+dna2[pos:], dna2[:pos]+dna1[pos:])
 
 #
 # Main 
