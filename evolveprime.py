@@ -33,11 +33,6 @@ def random_population():
 #
 
 def fitness(num):
-  """
-  For each number in our population we want to check 
-  if any of the numbers are prime and sum up all the counts
-  of the prime numbers and return it! 
-  """
   fitness = 0
   if isPrime(num):
     fitness = 1 
