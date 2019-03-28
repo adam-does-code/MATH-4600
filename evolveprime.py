@@ -7,7 +7,7 @@ from itertools import count, islice
 # Global variables
 #
 
-GENERATIONS = 50
+GENERATIONS = 20
 POP_SIZE = 20
 
 def custom_sort(t):
@@ -44,7 +44,7 @@ def fitness(num):
   return fitness
 
 def mutate(num):
-  return num + random.randint(-5, 5)
+  return num + random.randint(-10, 10)
 
 
 #
@@ -56,8 +56,9 @@ if __name__ == "__main__":
   population = random_population()
 
   # Time to generate our simulation!
+  print("\n\n")
   for generation in xrange(GENERATIONS):
-    print "Generation %s ... Random sample: '%s'" % (generation, population)
+    print "Gen %s - '%s'" % (generation, population)
     weighted_population = []
 
     # Add individuals and their respective fitness levels to the weighted
@@ -75,7 +76,7 @@ if __name__ == "__main__":
 
     weighted_population.sort(key = custom_sort)
     population = []
-    print weighted_population
+    # print weighted_population
 
     for individual, prime in weighted_population: 
       if prime == 0:
@@ -83,3 +84,4 @@ if __name__ == "__main__":
       else: 
         population.append(individual)
 
+  print("\n\n")

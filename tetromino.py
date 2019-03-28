@@ -6,6 +6,12 @@
 import random, time, pygame, sys
 from pygame.locals import *
 
+# SCORE STUFF 
+HEIGHT = 0.5
+HOLE = 4.0
+BLOCKAGE = 6.0
+TOUCHING = 0.2
+
 FPS = 25
 WINDOWWIDTH = 640
 WINDOWHEIGHT = 480
@@ -171,11 +177,225 @@ def main():
         else:
             pygame.mixer.music.load('tetrisc.mid')
         pygame.mixer.music.play(-1, 0.0)
-        runGame()
+        # runGame()
+        runAI()
         pygame.mixer.music.stop()
         showTextScreen('Game Over')
 
+def runAI():
 
+    board = getBlankBoard()
+    lastMoveDownTime = time.time()
+    lastMoveSidewaysTime = time.time()
+    lastFallTime = time.time()
+    movingDown = False # note: there is no movingUp variable
+    movingLeft = False
+    movingRight = False
+    score = 0
+    level, fallFreq = calculateLevelAndFallFreq(score)
+
+    fallingPiece = getNewPiece()
+    nextPiece = getNewPiece()
+    num = 0
+
+    while True: # game loop
+        if fallingPiece == None:
+            # No falling piece in play, so start a new piece at the top
+            fallingPiece = nextPiece
+            nextPiece = getNewPiece()
+            lastFallTime = time.time() # reset lastFallTime
+
+            if not isValidPosition(board, fallingPiece):
+                return # can't fit a new piece on the board, so game over
+
+        checkForQuit()
+
+        surface = getSurface(board)
+        moveLocation = calculateBestMove(surface, fallingPiece)
+        pyGameEvents = calculateMoves(fallingPiece, moveLocation, 0)
+        for event in pyGameEvents: # event handling loop
+            # print(event)
+            if event.type == KEYUP:
+                if (event.key == K_p):
+                    # Pausing the game
+                    DISPLAYSURF.fill(BGCOLOR)
+                    pygame.mixer.music.stop()
+                    showTextScreen('Paused') # pause until a key press
+                    pygame.mixer.music.play(-1, 0.0)
+                    lastFallTime = time.time()
+                    lastMoveDownTime = time.time()
+                    lastMoveSidewaysTime = time.time()
+                elif (event.key == K_LEFT or event.key == K_a):
+                    movingLeft = False
+                elif (event.key == K_RIGHT or event.key == K_d):
+                    movingRight = False
+                elif (event.key == K_DOWN or event.key == K_s):
+                    movingDown = False
+
+            elif event.type == KEYDOWN:
+                # moving the piece sideways
+                if (event.key == K_LEFT or event.key == K_a) and isValidPosition(board, fallingPiece, adjX=-1):
+                    fallingPiece['x'] -= 1
+                    movingLeft = True
+                    movingRight = False
+                    lastMoveSidewaysTime = time.time()
+
+                elif (event.key == K_RIGHT or event.key == K_d) and isValidPosition(board, fallingPiece, adjX=1):
+                    fallingPiece['x'] += 1
+                    movingRight = True
+                    movingLeft = False
+                    lastMoveSidewaysTime = time.time()
+
+                # rotating the piece (if there is room to rotate)
+                elif (event.key == K_UP or event.key == K_w):
+                    fallingPiece['rotation'] = (fallingPiece['rotation'] + 1) % len(PIECES[fallingPiece['shape']])
+                    if not isValidPosition(board, fallingPiece):
+                        fallingPiece['rotation'] = (fallingPiece['rotation'] - 1) % len(PIECES[fallingPiece['shape']])
+                elif (event.key == K_q): # rotate the other direction
+                    fallingPiece['rotation'] = (fallingPiece['rotation'] - 1) % len(PIECES[fallingPiece['shape']])
+                    if not isValidPosition(board, fallingPiece):
+                        fallingPiece['rotation'] = (fallingPiece['rotation'] + 1) % len(PIECES[fallingPiece['shape']])
+
+                # making the piece fall faster with the down key
+                elif (event.key == K_DOWN or event.key == K_s):
+                    movingDown = True
+                    if isValidPosition(board, fallingPiece, adjY=1):
+                        fallingPiece['y'] += 1
+                    lastMoveDownTime = time.time()
+
+                # move the current piece all the way down
+                elif event.key == K_SPACE:
+                    movingDown = False
+                    movingLeft = False
+                    movingRight = False
+                    for i in range(1, BOARDHEIGHT):
+                        if not isValidPosition(board, fallingPiece, adjY=i):
+                            break
+                    fallingPiece['y'] += i - 1
+            pyGameEvents.pop(0)
+
+        # handle moving the piece because of user input
+        if (movingLeft or movingRight) and time.time() - lastMoveSidewaysTime > MOVESIDEWAYSFREQ:
+            if movingLeft and isValidPosition(board, fallingPiece, adjX=-1):
+                fallingPiece['x'] -= 1
+            elif movingRight and isValidPosition(board, fallingPiece, adjX=1):
+                fallingPiece['x'] += 1
+            lastMoveSidewaysTime = time.time()
+
+        if movingDown and time.time() - lastMoveDownTime > MOVEDOWNFREQ and isValidPosition(board, fallingPiece, adjY=1):
+            fallingPiece['y'] += 1
+            lastMoveDownTime = time.time()
+
+        # let the piece fall if it is time to fall
+        if time.time() - lastFallTime > fallFreq:
+            # see if the piece has landed
+            if not isValidPosition(board, fallingPiece, adjY=1):
+                # falling piece has landed, set it on the board
+                addToBoard(board, fallingPiece)
+                score += removeCompleteLines(board)
+                level, fallFreq = calculateLevelAndFallFreq(score)
+                fallingPiece = None
+            else:
+                # piece did not land, just move the piece down
+                fallingPiece['y'] += 1
+                lastFallTime = time.time()
+
+        # drawing everything on the screen
+        DISPLAYSURF.fill(BGCOLOR)
+        drawBoard(board)
+        drawStatus(score, level)
+        drawNextPiece(nextPiece)
+        if fallingPiece != None:
+            drawPiece(fallingPiece)
+
+        pygame.display.update()
+        FPSCLOCK.tick(FPS)
+
+
+def calculateMoves(piece, x, y):
+    #x y would be the right most bottom cornor of where the piece is 
+    current = piece['x'] + 2
+    moves = [] 
+    leftEvent = pygame.event.Event(2, {'scancode': 123, 'key': 276, 'unicode': u'\uf702', 'mod': 0})
+    rightEvent = pygame.event.Event(2, {'scancode': 124, 'key': 275, 'unicode': u'\uf703', 'mod': 0})
+    spaceEvent = pygame.event.Event(2, {'scancode': 35, 'key': K_DOWN, 'unicode': u'p', 'mod': 0})
+    print("x: %s y: %s\n" % (piece['x'], piece['y']))
+    if (current > x):
+        numLefts = current - x
+        numLefts = numLefts - 2
+        for x in range(0, numLefts):
+            moves.append(leftEvent)
+    elif (current < x):
+        numRights =  x - current
+        numRights = numRights - 2
+        # print("LEFT: %s" % numLefts)
+        for x in range(0, numRights):
+            moves.append(rightEvent)
+    moves.append(spaceEvent)
+    print("moves: %s" % moves)
+    return moves
+
+def getSurface(board):
+    # print(board)
+    surfaceLevel = [19,19,19,19,19,19,19,19,19,19]
+
+    for row in board:
+        for index in row:
+            if index is not '.':
+                surfaceLevel[board.index(row)] = row.index(index)
+                break
+    print(surfaceLevel)
+    return surfaceLevel
+
+def calculateBestMove(surface, piece): 
+    print(piece["shape"])
+    if piece['shape'] == 'I':
+        #The rules of where an I shape can go
+        for idx, val in enumerate(surface):
+            print(idx, val)
+            if (idx == idx + 1 and val[idx] + 3 == val[idx + 1]):
+                return idx
+            elif (idx == idx + 1 == idx + 2 == idx + 3 and val[idx] == val[idx + 1] == val[idx + +2] + val[idx + 3]):
+                piece["rotation"] = 1
+                return idx
+            else: 
+                return -2
+    elif piece['shape'] == 'O':
+        # O shaped
+        for idx, val in enumerate(surface):
+            print("idx val: %s %s" % (idx, val))
+            options = []
+            if (val == surface[idx - 1]):
+                sol = (val, idx)
+                options.append(sol)
+        print("options: %s" % options)
+        if (len(options) is not 0):
+            lowest = options[0]
+            for i in range(len(options)):
+                if lowest[0] > options[i][0]:
+                    lowest = options[i]
+            return lowest[1]
+        return -1
+    elif piece['shape'] == 'S':
+        return 7
+    elif piece['shape'] == 'T':
+        for idx, val in enumerate(surface):
+            print("idx val: %s %s" % (idx, val))
+            options = []
+            if (val == surface[idx - 1] + 1 == surface[idx + 1] + 1):
+                sol = (val, idx)
+                options.append(sol)
+        return 4
+    elif piece['shape'] == 'Z':
+        return -2
+    elif piece['shape'] == 'J':
+        return 4
+    elif piece['shape'] == 'L':
+        for idx, val in enumerate(surface):
+            options = []
+            if (idx == idx + 1 and val[idx] == val[idx + 1]):
+                return idx
+    return 7
 def runGame():
     # setup variables for the start of the game
     board = getBlankBoard()
