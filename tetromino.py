@@ -10,12 +10,14 @@ import sys
 from pygame.locals import *
 
 # SCORE STUFF
-HEIGHT = 0.5
-HOLE = 4.0
-BLOCKAGE = 6.0
-TOUCHING = 0.2
-
-SURFACELEVEL = [19, 19, 19, 19, 19, 19, 19, 19, 19, 19]
+HEIGHT = -0.5
+LINECLEAR = 0.8
+HOLE = -4.0
+BLOCKAGE = -6.0
+TOUCHPIECE = 0.1
+TOUCHWALL = 0.2
+TOUCHGROUND = 0.1
+CLEARLINE = 1.2
 
 FPS = 25
 WINDOWWIDTH = 640
@@ -165,7 +167,6 @@ PIECES = {'S': S_SHAPE_TEMPLATE,
           'O': O_SHAPE_TEMPLATE,
           'T': T_SHAPE_TEMPLATE}
 
-
 def main():
     global FPSCLOCK, DISPLAYSURF, BASICFONT, BIGFONT
     pygame.init()
@@ -183,8 +184,8 @@ def main():
         else:
             pygame.mixer.music.load('tetrisc.mid')
         # pygame.mixer.music.play(-1, 0.0)
-        # runGame()
-        runAI()
+        runGame()
+        # runAI()
         # pygame.mixer.music.stop()
         showTextScreen('Game Over')
 
@@ -199,6 +200,7 @@ def runAI():
     movingLeft = False
     movingRight = False
     score = 0
+    totalScore = 0
     level, fallFreq = calculateLevelAndFallFreq(score)
 
     fallingPiece = getNewPiece()
@@ -216,10 +218,10 @@ def runAI():
                 return  # can't fit a new piece on the board, so game over
 
         checkForQuit()
-
+        print(board)
         surfaceLevel = getSurface(board)
-        moveLocation = calculateBestMove(surfaceLevel, fallingPiece)
-        pyGameEvents = calculateMoves(fallingPiece, moveLocation, 0)
+        bestMovement = calculateBestMove(surfaceLevel, fallingPiece)
+        pyGameEvents = calculateMoves(fallingPiece, bestMovement['index'], bestMovement['rotation'])
         print(pyGameEvents)
         for event in pyGameEvents:  # event handling loop
             # print(event)
@@ -280,14 +282,15 @@ def runAI():
                     lastMoveDownTime = time.time()
 
                 # move the current piece all the way down
-                elif event.key == K_SPACE:
-                    movingDown = False
-                    movingLeft = False
-                    movingRight = False
-                    for i in range(1, BOARDHEIGHT):
-                        if not isValidPosition(board, fallingPiece, adjY=i):
-                            break
-                    fallingPiece['y'] += i - 1
+                #UNCOMMENT ME
+                # elif event.key == K_SPACE:
+                #     movingDown = False
+                #     movingLeft = False
+                #     movingRight = False
+                #     for i in range(1, BOARDHEIGHT):
+                #         if not isValidPosition(board, fallingPiece, adjY=i):
+                #             break
+                #     fallingPiece['y'] += i - 1
             pyGameEvents.pop(0)
 
         # handle moving the piece because of user input
@@ -308,6 +311,7 @@ def runAI():
                 # falling piece has landed, set it on the board
                 addToBoard(board, fallingPiece)
                 score += removeCompleteLines(board)
+
                 level, fallFreq = calculateLevelAndFallFreq(score)
                 fallingPiece = None
             else:
@@ -333,22 +337,27 @@ def calculateMoves(piece, x, y):
     moves = []
     leftEvent = pygame.event.Event(2, {'scancode': 123, 'key': K_LEFT, 'unicode': u'\uf702', 'mod': 0})
     rightEvent = pygame.event.Event(pygame.KEYDOWN, {'key':pygame.K_RIGHT})
-    spaceEvent = pygame.event.Event(2, {'scancode': 35, 'key': K_DOWN, 'unicode': u'p', 'mod': 0})
+    # spaceEvent = pygame.event.Event(2, {'scancode': 35, 'key': K_DOWN, 'unicode': u'p', 'mod': 0})
+    rotate = pygame.event.Event(2, {'key': K_UP})
     print("x: %s to go: %s\n" % (piece['x'], x))
+
+    if (piece['rotation'] != y):
+        moves.append(rotate)
     if (piece['x'] > x):
         numLefts = piece['x'] - x
         # numLefts = numLefts - 2
         for x in range(0, numLefts):
-            print("LEFT?")
+            # print("LEFT?")
             moves.append(leftEvent)
     elif (piece['x'] < x):
         # numRights = 2
         numRights =  x - piece['x']
-        print("num rights", numRights)
+        # print("num rights", numRights)
         for x in range(0, numRights):
-            print("RIGHT:")
+            # print("RIGHT:")
             moves.append(rightEvent)
-    moves.append(spaceEvent)
+    # moves.append(spaceEvent)
+    # moves.append(rotaate)
     # print("moves: %s" % moves)
     return moves
 
@@ -371,53 +380,164 @@ def getSurface(board):
 def calculateBestMove(surface, piece):
     # print(piece["shape"])
     if piece['shape'] == 'I':
-        # The rules of where an I shape can go
-        for idx, val in enumerate(surface):
-            # print(idx, val)
-            if (idx == idx + 1 and val[idx] + 3 == val[idx + 1]):
-                return idx
-            elif (idx == idx + 1 == idx + 2 == idx + 3 and val[idx] == val[idx + 1] == val[idx + +2] + val[idx + 3]):
-                piece["rotation"] = 1
-                return idx
-            else:
-                return -2
-    elif piece['shape'] == 'O':
-        # O shaped
-        options = []
-        for idx, val in enumerate(surface):
-            # print("idx val: %s %s" % (idx, val))
-            if (val == surface[idx - 1]):
-                sol = (val, idx - 2)
-                options.append(sol)
-        print("options: %s" % options)
-        if (len(options) is not 0):
-            lowest = options[0]
-            for i in range(len(options)):
-                if lowest[0] < options[i][0]:
-                    lowest = options[i]
-            print(lowest[1])
-        return lowest[1] 
-    elif piece['shape'] == 'S':
-        return 7
-    elif piece['shape'] == 'T':
-        for idx, val in enumerate(surface):
-            print("idx val: %s %s" % (idx, val))
-            options = []
-            if (val == surface[idx - 1] + 1 == surface[idx + 1] + 1):
-                sol = (val, idx)
-                options.append(sol)
-        return 4
-    elif piece['shape'] == 'Z':
-        return -2
-    elif piece['shape'] == 'J':
-        return 4
-    elif piece['shape'] == 'L':
-        for idx, val in enumerate(surface):
-            options = []
-            if (idx == idx + 1 and val[idx] == val[idx + 1]):
-                return idx
-    return 7
+        return bestMoveI(piece, surface)
+    # elif piece['shape'] == 'O':
+    #     # O shaped
+    #     options = []
+    #     for idx, val in enumerate(surface):
+    #         if (val == surface[idx - 1]):
+    #             sol = (val, idx - 2)
+    #             options.append(sol)
+    #     print("options: %s" % options)
+    #     if (len(options) is not 0):
+    #         lowest = options[0]
+    #         for i in range(len(options)):
+    #             if lowest[0] < options[i][0]:
+    #                 lowest = options[i]
+    #         print(lowest[1])
+    #         return lowest[1] 
+    # elif piece['shape'] == 'S':
+    #     options = []
+    #     for idx, val in enumerate(surface):
+    #         print("idx val: %s %s" % (idx, val))
+    #         if (piece['rotation'] == 0 and idx <= 7 and val == surface[idx + 1] == surface[idx + 2] + 1):
+    #             sol = (val, idx - 2)
+    #             options.append(sol)
+    #         elif (piece['rotation'] == 1 and idx <= 8 and val == surface[idx + 1] - 1):
+    #             sol = (val, idx - 2)
+    #             options.append(sol)
+    #     print("options", options)
+    #     if (len(options) is not 0):
+    #         lowest = options[0]
+    #         for i in range(len(options)):
+    #             if lowest[0] < options[i][0]:
+    #                 lowest = options[i]
+    #         print(lowest[1])
+    #         return lowest[1] 
+    # elif piece['shape'] == 'T':
+    #     options = []
+    #     for idx, val in enumerate(surface):
+    #         print("idx val: %s %s" % (idx, val))
+    #         if (piece['rotation'] == 0 and idx <= 7 and val == surface[idx + 1] == surface[idx + 2]):
+    #             sol = (val, idx - 1)
+    #             options.append(sol)
+    #         elif (piece['rotation'] == 1 and idx <= 8 and val == surface[idx + 1] + 1):
+    #             sol = (val, idx - 2)
+    #             options.append(sol)
+    #         elif (piece['rotation'] == 2 and idx <= 7 and (val == surface[idx + 1] - 1 or val == surface[idx + 1] + 1)) :
+    #             sol = (val, idx - 2)
+    #             options.append(sol)
+    #         elif (piece['rotation'] == 3 and idx <= 8 and val == surface[idx + 1] - 1):
+    #             sol = (val, idx - 2)
+    #             options.append(sol)
+    #     if (len(options) is not 0):
+    #         lowest = options[0]
+    #         for i in range(len(options)):
+    #             if lowest[0] < options[i][0]:
+    #                 lowest = options[i]
+    #         print(lowest[1])
+    #         return lowest[1] 
+    # elif piece['shape'] == 'Z':
+    #     options = []
+    #     for idx, val in enumerate(surface):
+    #         print("idx val: %s %s" % (idx, val))
+    #         if (piece['rotation'] == 1 and idx <= 7 and val + 1 == surface[idx + 1] == surface[idx + 2]):
+    #             sol = (val, idx - 2)
+    #             options.append(sol)
+    #         elif (piece['rotation'] == 0 and idx <= 8 and val == surface[idx + 1] + 1): 
+    #             sol = (val, idx - 1)
+    #             options.append(sol)
+    #     print("options", options)
+    #     if (len(options) is not 0):
+    #         lowest = options[0]
+    #         for i in range(len(options)):
+    #             if lowest[0] < options[i][0]:
+    #                 lowest = options[i]
+    #         print(lowest[1])
+    #         return lowest[1] 
+    # elif piece['shape'] == 'J':
+    #     options = []
+    #     for idx, val in enumerate(surface):
+    #         print("idx val: %s %s" % (idx, val))
+    #         if (piece['rotation'] == 0 and idx <= 7 and val == surface[idx + 1] == surface[idx + 2]):
+    #             sol = (val, idx - 1)
+    #             options.append(sol)
+    #         elif (piece['rotation'] == 1 and idx <= 8 and val == surface[idx + 1] + 2): 
+    #             sol = (val, idx - 2)
+    #             options.append(sol)
+    #         elif (piece['rotation'] == 2 and idx <= 7 and val == surface[idx + 1] == surface[idx + 2] - 1): 
+    #             sol = (val, idx - 1)
+    #             options.append(sol)
+    #         elif (piece['rotation'] == 3 and idx <= 8 and val == surface[idx + 1]): 
+    #             sol = (val, idx - 1)
+    #             options.append(sol)
+    #     print("options", options)
+    #     if (len(options) is not 0):
+    #         lowest = options[0]
+    #         for i in range(len(options)):
+    #             if lowest[0] < options[i][0]:
+    #                 lowest = options[i]
+    #         print(lowest[1])
+    #         return lowest[1] 
+    # elif piece['shape'] == 'L':
+    #     for idx, val in enumerate(surface):
+    #         options = []
+    #         if (idx == idx + 1 and val[idx] == val[idx + 1]):
+    #             return idx
 
+    # return random.randint(-2, 7)
+# def didCreateHole(board):
+
+def bestMoveI(piece, surface):
+    options = []
+    bestOption = { 'index': piece['x'],
+                   'rotation': piece['rotation'] }
+    for idx, val in enumerate(surface):
+        print(idx, val)
+        for rotation in range(0,2): 
+            if (piece['rotation'] == rotation):
+                sol = (val, idx - 2, rotation, 0)
+                options.append(sol)
+            if (piece['rotation'] == rotation and idx <= 6 and val == surface[idx + 1] == surface[idx + 2] == surface[idx + 3]):
+                sol = (val, idx, rotation, 0)
+                options.append(sol)
+    print("options", options)
+    if (len(options) is not 0):
+        lowest = options[0]
+        for i in range(len(options)):
+            if lowest[0] < options[i][0]:
+                lowest = options[i]
+        print("lowest", lowest[1])
+        bestOption['index'] = lowest[1]
+        bestOption['rotation'] = lowest[2]
+        print("bestOption", bestOption)
+        return bestOption
+
+def getBestOption(options):
+    score = 0
+    for i in range(len(options)):
+       #check if board is touching ground 
+       if options[i][0] is 19:
+           print("ass")
+
+# Function that takes the board and where the piece is going to go
+# and returns the the board but only for the rows where the piece will be!
+def getReducedboard(board):
+    pieceList = []
+    smolBoard = []
+    for x, idx in piece:
+        if x not in pieceList:
+            pieceList.append(x)
+
+    for y in range(0, len(pieceList)):
+        individBoard = []
+        for x in range(0, 10):
+            # print(board[x][pieceList[y]])
+            individBoard.append(board[x][pieceList[y]])
+        print(individBoard)
+        smolBoard.append(individBoard)
+    print(smolBoard)
+    return smolBoard
 
 def runGame():
     # setup variables for the start of the game
@@ -433,7 +553,6 @@ def runGame():
 
     fallingPiece = getNewPiece()
     nextPiece = getNewPiece()
-
     while True:  # game loop
         if fallingPiece == None:
             # No falling piece in play, so start a new piece at the top
@@ -443,7 +562,7 @@ def runGame():
 
             if not isValidPosition(board, fallingPiece):
                 return  # can't fit a new piece on the board, so game over
-        print("peice %s" % fallingPiece['x'])
+        print(fallingPiece['shape'], fallingPiece['x'], fallingPiece['y'])
         checkForQuit()
         for event in pygame.event.get():  # event handling loop
             if event.type == KEYUP:
@@ -611,9 +730,11 @@ def calculateLevelAndFallFreq(score):
 def getNewPiece():
     # return a random new piece in a random rotation and color
     shape = random.choice(list(PIECES.keys()))
+    # shape = "I"
     # print("SHAPE %s" % shape)
+    # random.randint(0, len(PIECES[shape]) - 1)
     newPiece = {'shape': shape,
-                'rotation': 0,
+                'rotation': random.randint(0, len(PIECES[shape]) - 1),
                 'x': int(BOARDWIDTH / 2) - int(TEMPLATEWIDTH / 2),
                 'y': -2,  # start it above the board (i.e. less than 0)
                 'color': random.randint(0, len(COLORS)-1)}
