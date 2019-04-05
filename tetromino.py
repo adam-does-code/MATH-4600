@@ -11,7 +11,6 @@ from pygame.locals import *
 
 # SCORE STUFF
 HEIGHT = -0.5
-LINECLEAR = 0.8
 HOLE = -4.0
 BLOCKAGE = -6.0
 TOUCHPIECE = 0.1
@@ -218,9 +217,11 @@ def runAI():
                 return  # can't fit a new piece on the board, so game over
 
         checkForQuit()
-        print(board)
+        # print(board)
         surfaceLevel = getSurface(board)
-        bestMovement = calculateBestMove(surfaceLevel, fallingPiece)
+        bestMovement = calculateBestMove(surfaceLevel, fallingPiece, board)
+        print("BEST MOVE", bestMovement)
+        print("Actualy rotatio", fallingPiece['rotation'])
         pyGameEvents = calculateMoves(fallingPiece, bestMovement['index'], bestMovement['rotation'])
         print(pyGameEvents)
         for event in pyGameEvents:  # event handling loop
@@ -283,14 +284,14 @@ def runAI():
 
                 # move the current piece all the way down
                 #UNCOMMENT ME
-                # elif event.key == K_SPACE:
-                #     movingDown = False
-                #     movingLeft = False
-                #     movingRight = False
-                #     for i in range(1, BOARDHEIGHT):
-                #         if not isValidPosition(board, fallingPiece, adjY=i):
-                #             break
-                #     fallingPiece['y'] += i - 1
+                elif event.key == K_SPACE:
+                    movingDown = False
+                    movingLeft = False
+                    movingRight = False
+                    for i in range(1, BOARDHEIGHT):
+                        if not isValidPosition(board, fallingPiece, adjY=i):
+                            break
+                    fallingPiece['y'] += i - 1
             pyGameEvents.pop(0)
 
         # handle moving the piece because of user input
@@ -339,10 +340,8 @@ def calculateMoves(piece, x, y):
     rightEvent = pygame.event.Event(pygame.KEYDOWN, {'key':pygame.K_RIGHT})
     # spaceEvent = pygame.event.Event(2, {'scancode': 35, 'key': K_DOWN, 'unicode': u'p', 'mod': 0})
     rotate = pygame.event.Event(2, {'key': K_UP})
-    print("x: %s to go: %s\n" % (piece['x'], x))
+    # print("x: %s to go: %s\n" % (piece['x'], x))
 
-    if (piece['rotation'] != y):
-        moves.append(rotate)
     if (piece['x'] > x):
         numLefts = piece['x'] - x
         # numLefts = numLefts - 2
@@ -357,15 +356,16 @@ def calculateMoves(piece, x, y):
             # print("RIGHT:")
             moves.append(rightEvent)
     # moves.append(spaceEvent)
-    # moves.append(rotaate)
+    rotation = piece['rotation']
+    if (rotation != y):
+        moves.append(rotate)
+        rotation += 1
     # print("moves: %s" % moves)
     return moves
 
 
 def getSurface(board):
-    # print(board)
     surfaceLevel = [19, 19, 19, 19, 19, 19, 19, 19, 19, 19]
-    # print(board)
     i = -1
     for row in board:
         i += 1
@@ -373,14 +373,17 @@ def getSurface(board):
             if index is not '.':
                 surfaceLevel[i] = row.index(index)
                 break
-    print(surfaceLevel)
     return surfaceLevel
 
 
-def calculateBestMove(surface, piece):
+def calculateBestMove(surface, piece, board):
     # print(piece["shape"])
     if piece['shape'] == 'I':
-        return bestMoveI(piece, surface)
+        bestMove = bestMoveI(piece, surface, board)
+        return bestMove
+
+
+
     # elif piece['shape'] == 'O':
     #     # O shaped
     #     options = []
@@ -488,41 +491,85 @@ def calculateBestMove(surface, piece):
     # return random.randint(-2, 7)
 # def didCreateHole(board):
 
-def bestMoveI(piece, surface):
-    options = []
-    bestOption = { 'index': piece['x'],
-                   'rotation': piece['rotation'] }
-    for idx, val in enumerate(surface):
-        print(idx, val)
-        for rotation in range(0,2): 
-            if (piece['rotation'] == rotation):
-                sol = (val, idx - 2, rotation, 0)
-                options.append(sol)
-            if (piece['rotation'] == rotation and idx <= 6 and val == surface[idx + 1] == surface[idx + 2] == surface[idx + 3]):
-                sol = (val, idx, rotation, 0)
-                options.append(sol)
-    print("options", options)
-    if (len(options) is not 0):
-        lowest = options[0]
-        for i in range(len(options)):
-            if lowest[0] < options[i][0]:
-                lowest = options[i]
-        print("lowest", lowest[1])
-        bestOption['index'] = lowest[1]
-        bestOption['rotation'] = lowest[2]
-        print("bestOption", bestOption)
-        return bestOption
+def doesClearLine(piece, board):
+    pieceIndex = []
+    for x in piece:
+        pieceIndex.append(x[1])
+    for row in board:
+        for index in row:
+            for piece in pieceIndex:
+                if (board[0][piece] == "."):
+                    board[0][piece] = "T"
+    for row in board:
+        for index in row:
+            if index is ".":
+                return False
+    return True 
 
-def getBestOption(options):
-    score = 0
-    for i in range(len(options)):
-       #check if board is touching ground 
-       if options[i][0] is 19:
-           print("ass")
+def touchWall(shapeList):
+    for shape in shapeList:
+        if shape[1] is 0 or shape[1] is 9:
+            return True
+    return False
+
+def touchFloor(shapeList):
+  for shape in shapeList:
+    if shape[0] is 19:
+      return True
+  return False  
+
+def bestMoveI(piece, surface, board):
+    options = []
+    for idx, val in enumerate(surface):
+        if (piece['rotation'] is 0 and idx <= 6 and val == surface[idx + 1] == surface[idx + 2] == surface[idx + 3]):
+            shapeList = [ (val, idx), (val, idx + 1), (val, idx + 2), (val, idx + 3)]
+            indexTo = idx - 2
+            option = { 'shapeList': shapeList,
+                    'index': indexTo,
+                    'rotation': piece['rotation'],
+                    'score': 0 }
+            options.append(option)
+        if (piece['rotation'] is 1):
+            shapeList = [ (val, idx), (val - 1, idx), (val - 2, idx), (val - 3, idx)]
+            indexTo = idx - 2
+            option = { 'shapeList': shapeList,
+                    'index': indexTo,
+                    'rotation': piece['rotation'],
+                    'score': 0 }
+            options.append(option)
+    return getMaxScore(options, board)
+
+  HEIGHT = -0.5
+  LINECLEAR = 1.0
+  HOLE = -4.0
+  BLOCKAGE = -6.0
+  TOUCHPIECE = 0.1
+  TOUCHWALL = 0.2
+  TOUCHFLOOR = 0.1
+  CLEARLINE = 1.2
+
+def getMaxScore(options, board):
+    for option in options:
+        score = 0
+        reducedBoard = getReducedboard(board, option['shapeList'])
+        if touchWall(option['shapeList']) is True:
+            score += TOUCHWALL
+        if touchFloor(option['shapeList']) is True:
+            score += TOUCHFLOOR
+        if doesClearLine(option['shapeList'], reducedBoard) is True: 
+            score += LINECLEAR
+        option['score'] = score
+    
+    biggestOption = options[0]
+    for option in options:
+        if biggestOption['score'] <= option['score']:
+            biggestOption = option
+    return biggestOption
+
 
 # Function that takes the board and where the piece is going to go
 # and returns the the board but only for the rows where the piece will be!
-def getReducedboard(board):
+def getReducedboard(board, piece):
     pieceList = []
     smolBoard = []
     for x, idx in piece:
@@ -534,9 +581,9 @@ def getReducedboard(board):
         for x in range(0, 10):
             # print(board[x][pieceList[y]])
             individBoard.append(board[x][pieceList[y]])
-        print(individBoard)
+        # print(individBoard)
         smolBoard.append(individBoard)
-    print(smolBoard)
+    # print(smolBoard)
     return smolBoard
 
 def runGame():
@@ -562,7 +609,9 @@ def runGame():
 
             if not isValidPosition(board, fallingPiece):
                 return  # can't fit a new piece on the board, so game over
-        print(fallingPiece['shape'], fallingPiece['x'], fallingPiece['y'])
+        # print(fallingPiece['shape'], fallingPiece['x'], fallingPiece['y'])
+        # print(board)
+
         checkForQuit()
         for event in pygame.event.get():  # event handling loop
             if event.type == KEYUP:
