@@ -11,7 +11,7 @@ from pygame.locals import *
 
 # SCORE STUFF 
 #  maybe lets put these into a JSON obj so we can make them into an array n shit?
-HEIGHT = -0.5
+HEIGHT = 4
 HOLE = -5.0
 TOUCHPIECE = 0.1
 TOUCHWALL = 0.1
@@ -166,7 +166,7 @@ PIECES = {'S': S_SHAPE_TEMPLATE,
           'O': O_SHAPE_TEMPLATE,
           'T': T_SHAPE_TEMPLATE}
 
-def main():
+def main(population):
     global FPSCLOCK, DISPLAYSURF, BASICFONT, BIGFONT
     pygame.init()
     FPSCLOCK = pygame.time.Clock()
@@ -176,20 +176,26 @@ def main():
     pygame.display.set_caption('Tetromino')
 
     showTextScreen('Tetromino')
-    print("START")
-    while True:  # game loop
+    # while True:  # game loop
+    
+    count = 1
+    for pop in population:
         if random.randint(0, 1) == 0:
             pygame.mixer.music.load('tetrisb.mid')
         else:
             pygame.mixer.music.load('tetrisc.mid')
-        # pygame.mixer.music.play(-1, 0.0)
+        pygame.mixer.music.play(-1, 0.0)
         # runGame()
-        runAI()
+        score = runAI(pop, count)
+        population[count - 1]['totalScore'] = score
+        count += 1
+        print("count", count)
         # pygame.mixer.music.stop()
         showTextScreen('Game Over')
+    # print(population)
+    return population
 
-
-def runAI():
+def runAI(population, popNum):
 
     board = getBlankBoard()
     lastMoveDownTime = time.time()
@@ -209,24 +215,19 @@ def runAI():
     while True:  # game loop
         if fallingPiece == None:
             # No falling piece in play, so start a new piece at the top
+            score += 1
             fallingPiece = nextPiece
             nextPiece = getNewPiece()
             lastFallTime = time.time()  # reset lastFallTime
 
             if not isValidPosition(board, fallingPiece):
-                return  # can't fit a new piece on the board, so game over
+                return score
 
         checkForQuit()
-        # print(board)
         surfaceLevel = getSurface(board)
-        print(surfaceLevel)
-        bestMovement = calculateBestMove(surfaceLevel, fallingPiece, board)
-        print("BEST MOVE", bestMovement)
-        print("Actualy rotation", fallingPiece['rotation'])
+        bestMovement = calculateBestMove(surfaceLevel, fallingPiece, board, population)
         pyGameEvents = calculateMoves(fallingPiece, bestMovement['index'], bestMovement['rotation'])
-        print(pyGameEvents)
         for event in pyGameEvents:  # event handling loop
-            # print(event)
             if event.type == KEYUP:
                 if (event.key == K_p):
                     # Pausing the game
@@ -284,7 +285,6 @@ def runAI():
                     lastMoveDownTime = time.time()
 
                 # move the current piece all the way down
-                #UNCOMMENT ME
                 elif event.key == K_SPACE:
                     movingDown = False
                     movingLeft = False
@@ -295,16 +295,6 @@ def runAI():
                     fallingPiece['y'] += i - 1
             pyGameEvents.pop(0)
 
-        # handle moving the piece because of user input
-        # if (movingLeft or movingRight) and time.time() - lastMoveSidewaysTime > MOVESIDEWAYSFREQ:
-        #     if movingLeft and isValidPosition(board, fallingPiece, adjX=-1):
-        #         fallingPiece['x'] -= 1
-        #     elif movingRight and isValidPosition(board, fallingPiece, adjX=1):
-        #         fallingPiece['x'] += 1
-            # lastMoveSidewaysTime = time.time()
-        # if movingDown and time.time() - lastMoveDownTime > MOVEDOWNFREQ and isValidPosition(board, fallingPiece, adjY=1):
-        #     fallingPiece['y'] += 1
-        #     lastMoveDownTime = time.time()
 
         # let the piece fall if it is time to fall
         if time.time() - lastFallTime > fallFreq:
@@ -312,7 +302,7 @@ def runAI():
             if not isValidPosition(board, fallingPiece, adjY=1):
                 # falling piece has landed, set it on the board
                 addToBoard(board, fallingPiece)
-                score += removeCompleteLines(board)
+                score += removeCompleteLines(board) * 10
 
                 level, fallFreq = calculateLevelAndFallFreq(score)
                 fallingPiece = None
@@ -324,14 +314,13 @@ def runAI():
         # drawing everything on the screen
         DISPLAYSURF.fill(BGCOLOR)
         drawBoard(board)
-        drawStatus(score, level)
+        drawStatus(score, level, popNum, 0)
         drawNextPiece(nextPiece)
         if fallingPiece != None:
             drawPiece(fallingPiece)
 
         pygame.display.update()
         FPSCLOCK.tick(FPS)
-
 
 def calculateMoves(piece, x, y):
     # x y would be the right most bottom cornor of where the piece is
@@ -341,20 +330,16 @@ def calculateMoves(piece, x, y):
     rightEvent = pygame.event.Event(pygame.KEYDOWN, {'key':pygame.K_RIGHT})
     spaceEvent = pygame.event.Event(2, {'scancode': 35, 'key': K_DOWN, 'unicode': u'p', 'mod': 0})
     rotate = pygame.event.Event(2, {'key': K_UP})
-    # print("x: %s to go: %s\n" % (piece['x'], x))
 
     if (piece['x'] > x):
         numLefts = piece['x'] - x
         # numLefts = numLefts - 2
         for x in range(0, numLefts):
-            # print("LEFT?")
             moves.append(leftEvent)
     elif (piece['x'] < x):
         # numRights = 2
         numRights =  x - piece['x']
-        # print("num rights", numRights)
         for x in range(0, numRights):
-            # print("RIGHT:")
             moves.append(rightEvent)
 
     rotation = piece['rotation']
@@ -362,13 +347,12 @@ def calculateMoves(piece, x, y):
     if (numRotate < 0): 
         numRotate = -numRotate
     if (rotation != y):
-        for x in range(0, numRotate - 1):
+        for x in range(0, numRotate):
             moves.append(rotate)
 
     moves.append(spaceEvent)
 
     return moves
-
 
 def getSurface(board):
     surfaceLevel = [19, 19, 19, 19, 19, 19, 19, 19, 19, 19]
@@ -381,13 +365,11 @@ def getSurface(board):
                 break
     return surfaceLevel
 
-
-def calculateBestMove(surface, piece, board):
-    # print(piece["shape"])
+def calculateBestMove(surface, piece, board, population):
+    options = []
     if piece['shape'] is 'I':
-        options = []
         for idx, val in enumerate(surface):
-            if (idx <= 6 and val == surface[idx + 1] == surface[idx + 2] == surface[idx + 3]):
+            if (idx <= 6):
                 shapeList = [ (val, idx), (val, idx + 1), (val, idx + 2), (val, idx + 3)]
                 indexTo = idx - 2
                 option = { 'shapeList': shapeList,
@@ -402,9 +384,7 @@ def calculateBestMove(surface, piece, board):
                         'rotation': 0,
                         'score': 0 }
             options.append(option)
-        return getMaxScore(options, board)
     elif piece['shape'] is 'O':
-        options = []
         for idx, val in enumerate(surface):
             if (val == surface[idx - 1]):
                 shapeList = [ (val, idx - 1), (val, idx), (val - 1, idx - 1), (val - 1, idx)]
@@ -414,9 +394,7 @@ def calculateBestMove(surface, piece, board):
                             'rotation': piece['rotation'],
                             'score': 0 }
                 options.append(option)
-        return getMaxScore(options, board)
     elif piece['shape'] == 'S':
-        options = []
         for idx, val in enumerate(surface):
             if (idx <= 7):
                 sol = (val, idx - 2)
@@ -436,43 +414,37 @@ def calculateBestMove(surface, piece, board):
                             'rotation': 1,
                             'score': 0 }
                 options.append(option)
-        print("options", options)
-        return getMaxScore(options, board)
     elif piece['shape'] == 'T':
-        options = []
         for idx, val in enumerate(surface):
-            if (idx <= 7 and val == surface[idx + 1] == surface[idx + 2]):
+            if (idx <= 7):
                 shapeList = [ (val, idx), (val, idx + 1), (val - 1, idx + 1), (val, idx + 2)]
                 option = { 'shapeList': shapeList,
-                            'index': idx - 1,
+                            'index': idx - 2,
                             'rotation': 0,
                             'score': 0 }
                 options.append(option)
-            if (idx <= 8 and val == surface[idx + 1] + 1):
+            if (idx <= 8):
                 shapeList = [ (val, idx), (val - 1, idx), (val - 2, idx), (val - 1, idx + 1)]
                 option = { 'shapeList': shapeList,
                             'index': idx - 2,
                             'rotation': 1,
                             'score': 0 }
                 options.append(option)
-            if (idx <= 7 and (val == surface[idx + 1] - 1 or val == surface[idx + 1] + 1)):
+            if (idx <= 7):
                 shapeList = [ (val - 1, idx), (val - 1, idx + 1), (val - 1, idx + 2), (val, idx + 1)]
                 option = { 'shapeList': shapeList,
                             'index': idx - 2,
                             'rotation': 2,
                             'score': 0 }
                 options.append(option)
-            if (idx <= 8 and val == surface[idx + 1] - 1):
+            if (idx <= 8):
                 option = { 'shapeList': [(val, idx), (val - 1, idx), (val - 2, idx), (val - 1, idx - 1)],
                             'index': idx - 2,
                             'rotation': 3,
                             'score': 0 }
                 options.append(option)
-        return getMaxScore(options, board)
     elif piece['shape'] == 'Z':
-        options = []
         for idx, val in enumerate(surface):
-            print("idx val: %s %s" % (idx, val))
             if (idx <= 7):
                 shapeList = [(val, idx - 1), (val - 1, idx - 1), (val - 1, idx), (val - 2, idx)]
                 option = { 'shapeList': shapeList,
@@ -483,19 +455,16 @@ def calculateBestMove(surface, piece, board):
             if (idx <= 8): 
                 shapeList = [(val - 1, idx - 1), (val - 1, idx), (val, idx), (val, idx + 1)]
                 option = { 'shapeList': shapeList,
-                            'index': idx - 1,
+                            'index': idx - 2,
                             'rotation': 0,
                             'score': 0 }
                 options.append(option)
-        return getMaxScore(options, board)
     elif piece['shape'] == 'J':
-        options = []
         for idx, val in enumerate(surface):
-            print("idx val: %s %s" % (idx, val))
             if (idx <= 7):
                 shapeList = [(val, idx), (val - 1, idx), (val, idx + 1), (val, idx + 2)]
                 option = { 'shapeList': shapeList,
-                            'index': idx - 1,
+                            'index': idx - 2,
                             'rotation': 0,
                             'score': 0 }
                 options.append(option)
@@ -520,9 +489,7 @@ def calculateBestMove(surface, piece, board):
                             'rotation': 3,
                             'score': 0 }
                 options.append(option)
-        return getMaxScore(options, board)     
     elif piece['shape'] == 'L':
-        options = []
         for idx, val in enumerate(surface):
             if (idx <= 8):
                 shapeList = [ (val, idx - 2), (val, idx - 1), (val, idx), (val, idx - 1)]
@@ -552,7 +519,7 @@ def calculateBestMove(surface, piece, board):
                             'rotation': 3,
                             'score': 0 }
                 options.append(option)
-        return getMaxScore(options, board)     
+    return getMaxScore(options, board, population)     
 
 def heightPeanlizer(piece):
   pieceIndex = []
@@ -563,25 +530,18 @@ def heightPeanlizer(piece):
 
 def doesCreateHole(piece, board):
   pieceIndex = []
-  # print(board[0])
   for x in piece:
     pieceIndex.append(x[1])
 
-  print("piece", pieceIndex)
-  print("board", board)
   indexFits = 0
   for row in board:
     for index in row:
-      # print(index)
       for piece in pieceIndex:
         if (row[piece] == "."):
           indexFits = board.index(row)
         else:
           indexFits = 0 
 
-  print("index", indexFits)
-
-  print("board", board[indexFits])
   for index in board[indexFits]:
     for piece in pieceIndex:
       if board[indexFits][piece] == ".":
@@ -621,24 +581,30 @@ def touchFloor(shapeList):
       return True
   return False  
 
-def getMaxScore(options, board):
+def getMaxScore(options, board, population):
     for option in options:
         score = 0
         reducedBoard = getReducedboard(board, option['shapeList'])
         if touchWall(option['shapeList']) is True:
-            score += TOUCHWALL
+            score += population['touchWall']
         if touchFloor(option['shapeList']) is True:
-            score += TOUCHFLOOR
+            score += population['touchFloor']
         if doesClearLine(option['shapeList'], reducedBoard) is True: 
-            score += LINECLEAR
-        score += HOLE * doesCreateHole(option['shapeList'], getReducedboard(board, option['shapeList']))
-        score += HEIGHT * heightPeanlizer(option['shapeList'])
+            score += population['clearLine']
+        score += population['hole'] * doesCreateHole(option['shapeList'], getReducedboard(board, option['shapeList']))
+        score += population['height'] * heightPeanlizer(option['shapeList'])
         option['score'] = score
-    
-    biggestOption = options[0]
-    for option in options:
-        if biggestOption['score'] <= option['score']:
-            biggestOption = option
+
+    if len(options) > 0:
+        biggestOption = options[0]
+        for option in options:
+            if biggestOption['score'] <= option['score']:
+                biggestOption = option
+    else: 
+        return { 'shapeList': [],
+                  'index': random.randint(-2, 7),
+                   'rotation': 0,
+                   'score': 0 }
     return biggestOption
 
 
@@ -651,16 +617,12 @@ def getReducedboard(board, piece):
         if x not in pieceList:
             pieceList.append(x)
 
-    # print("piecelist", pieceList)
     pieceList.append(pieceList[-1] - 1)
     for y in range(0, len(pieceList)):
         individBoard = []
         for x in range(0, 10):
-            # print(board[x][pieceList[y]])
             individBoard.append(board[x][pieceList[y]])
-        # print(individBoard)
         smolBoard.append(individBoard)
-    # print("smol", smolBoard)
     return smolBoard
 
 def runGame():
@@ -686,8 +648,6 @@ def runGame():
 
             if not isValidPosition(board, fallingPiece):
                 return  # can't fit a new piece on the board, so game over
-        # print(fallingPiece['shape'], fallingPiece['x'], fallingPiece['y'])
-        # print(board)
 
         checkForQuit()
         for event in pygame.event.get():  # event handling loop
@@ -781,7 +741,7 @@ def runGame():
         # drawing everything on the screen
         DISPLAYSURF.fill(BGCOLOR)
         drawBoard(board)
-        drawStatus(score, level)
+        drawStatus(score, level, 1, 0)
         drawNextPiece(nextPiece)
         if fallingPiece != None:
             drawPiece(fallingPiece)
@@ -826,14 +786,14 @@ def showTextScreen(text):
     DISPLAYSURF.blit(titleSurf, titleRect)
 
     # Draw the additional "Press a key to play." text.
-    pressKeySurf, pressKeyRect = makeTextObjs(
-        'Press a key to play.', BASICFONT, TEXTCOLOR)
-    pressKeyRect.center = (int(WINDOWWIDTH / 2), int(WINDOWHEIGHT / 2) + 100)
-    DISPLAYSURF.blit(pressKeySurf, pressKeyRect)
+    # pressKeySurf, pressKeyRect = makeTextObjs(
+    #     'Press a key to play.', BASICFONT, TEXTCOLOR)
+    # pressKeyRect.center = (int(WINDOWWIDTH / 2), int(WINDOWHEIGHT / 2) + 100)
+    # DISPLAYSURF.blit(pressKeySurf, pressKeyRect)
 
-    while checkForKeyPress() == None:
-        pygame.display.update()
-        FPSCLOCK.tick()
+    # while checkForKeyPress() == None:
+    #     pygame.display.update()
+    #     FPSCLOCK.tick()
 
 
 def checkForQuit():
@@ -857,7 +817,6 @@ def getNewPiece():
     # return a random new piece in a random rotation and color
     shape = random.choice(list(PIECES.keys()))
     # shape = "L"
-    # print("SHAPE %s" % shape)
     # random.randint(0, len(PIECES[shape]) - 1)
     newPiece = {'shape': shape,
                 'rotation': random.randint(0, len(PIECES[shape]) - 1),
@@ -966,7 +925,7 @@ def drawBoard(board):
             drawBox(x, y, board[x][y])
 
 
-def drawStatus(score, level):
+def drawStatus(score, level, population, generation):
     # draw the score text
     scoreSurf = BASICFONT.render('Score: %s' % score, True, TEXTCOLOR)
     scoreRect = scoreSurf.get_rect()
@@ -977,6 +936,18 @@ def drawStatus(score, level):
     levelSurf = BASICFONT.render('Level: %s' % level, True, TEXTCOLOR)
     levelRect = levelSurf.get_rect()
     levelRect.topleft = (WINDOWWIDTH - 150, 50)
+    DISPLAYSURF.blit(levelSurf, levelRect)
+
+    # draw the population # text
+    levelSurf = BASICFONT.render('Population: %s' % population, True, TEXTCOLOR)
+    levelRect = levelSurf.get_rect()
+    levelRect.topleft = (WINDOWWIDTH - 150, 80)
+    DISPLAYSURF.blit(levelSurf, levelRect)
+
+    # draw the generation # text
+    levelSurf = BASICFONT.render('Generation: %s' % generation, True, TEXTCOLOR)
+    levelRect = levelSurf.get_rect()
+    levelRect.topleft = (WINDOWWIDTH - 150, 110)
     DISPLAYSURF.blit(levelSurf, levelRect)
 
 
@@ -998,11 +969,63 @@ def drawNextPiece(piece):
     # draw the "next" text
     nextSurf = BASICFONT.render('Next:', True, TEXTCOLOR)
     nextRect = nextSurf.get_rect()
-    nextRect.topleft = (WINDOWWIDTH - 120, 80)
+    nextRect.topleft = (WINDOWWIDTH - 120, 150)
     DISPLAYSURF.blit(nextSurf, nextRect)
     # draw the "next" piece
-    drawPiece(piece, pixelx=WINDOWWIDTH-120, pixely=100)
+    drawPiece(piece, pixelx=WINDOWWIDTH-120, pixely=150)
+
+### Genetic Algorithm Functions
+def initialPopulation():
+    population = [] 
+    for x in range(0, 8):
+        chromosome = { "height": -random.randint(10, 20),
+                       "hole": -random.randint(10, 20),
+                       "touchPiece": random.randint(0, 1),
+                       "touchWall": random.randint(0, 2),
+                       "touchFloor": random.randint(1, 10),
+                       "clearLine": random.randint(10, 25),
+                       "totalScore": 0}
+        population.append(chromosome)
+    return population
+
+def custom_sort(t):
+  return -t['totalScore']
+
+def crossover(pop1, pop2):
+  pop1['clearLine'], pop2['clearLine'] = pop2['clearLine'], pop1['clearLine']
+  pop1['hole'], pop2['hole'] = pop2['hole'], pop1['hole']
+  pop1['height'], pop2['height'] = pop2['height'], pop1['height']
+
+  return pop1, pop2
+
+def mutate(pop): 
+  pop['touchFloor'] += random.randint(-3, 3)
+  pop['touchPiece'] += random.randint(-1, 1)
+  pop['touchWall'] += random.randint(-1, 1)
+#   pop['hole'] -= random.randint(0, 10)
+#   pop['height'] -= random.randint(0, 10)
+#   pop['clearLine'] += random.randint(-1, 1)
+
+  return pop
 
 
 if __name__ == '__main__':
-    main()
+    population = initialPopulation()
+    scoredPopulation = main(population)
+
+    while(True):
+        scoredPopulation.sort(key=custom_sort)
+        scoredPopulation = sorted(scoredPopulation, key=custom_sort)
+        print(scoredPopulation)
+        # scoredPopulation = scoredPopulation[:4]
+        newPopulation = []
+        for x in range(0, 2):
+            pop1, pop2 = crossover(population[x], population[x + 1])
+            pop1 = mutate(pop1)
+            pop2 = mutate(pop2)
+            newPopulation.append(pop1)
+            newPopulation.append(pop2)
+        scoredPopulation = main(newPopulation)
+
+
+
