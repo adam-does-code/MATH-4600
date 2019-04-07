@@ -12,11 +12,10 @@ from pygame.locals import *
 # SCORE STUFF 
 #  maybe lets put these into a JSON obj so we can make them into an array n shit?
 HEIGHT = -0.5
-HOLE = -4.0
-BLOCKAGE = -6.0
+HOLE = -5.0
 TOUCHPIECE = 0.1
-TOUCHWALL = 0.2
-TOUCHFLOOR = 0.3
+TOUCHWALL = 0.1
+TOUCHFLOOR = 0.5
 CLEARLINE = 1.2
 
 FPS = 25
@@ -357,12 +356,17 @@ def calculateMoves(piece, x, y):
         for x in range(0, numRights):
             # print("RIGHT:")
             moves.append(rightEvent)
-    moves.append(spaceEvent)
+
     rotation = piece['rotation']
+    numRotate = y - rotation
+    if (numRotate < 0): 
+        numRotate = -numRotate
     if (rotation != y):
-        moves.append(rotate)
-        rotation += 1
-    # print("moves: %s" % moves)
+        for x in range(0, numRotate - 1):
+            moves.append(rotate)
+
+    moves.append(spaceEvent)
+
     return moves
 
 
@@ -550,10 +554,45 @@ def calculateBestMove(surface, piece, board):
                 options.append(option)
         return getMaxScore(options, board)     
 
+def heightPeanlizer(piece):
+  pieceIndex = []
+  for x in piece:
+    pieceIndex.append(x[0])
+  
+  return len(pieceIndex)
 
+def doesCreateHole(piece, board):
+  pieceIndex = []
+  # print(board[0])
+  for x in piece:
+    pieceIndex.append(x[1])
 
+  print("piece", pieceIndex)
+  print("board", board)
+  indexFits = 0
+  for row in board:
+    for index in row:
+      # print(index)
+      for piece in pieceIndex:
+        if (row[piece] == "."):
+          indexFits = board.index(row)
+        else:
+          indexFits = 0 
 
-# def didCreateHole(board):
+  print("index", indexFits)
+
+  print("board", board[indexFits])
+  for index in board[indexFits]:
+    for piece in pieceIndex:
+      if board[indexFits][piece] == ".":
+        board[indexFits][piece] = "T"
+  
+  for row in range(0, 1):
+    for index in range(0, 10):
+      if board[row][index] is "." and board[row + 1][index] is "T":
+        return True
+
+  return False
 
 def doesClearLine(piece, board):
     pieceIndex = []
@@ -592,6 +631,8 @@ def getMaxScore(options, board):
             score += TOUCHFLOOR
         if doesClearLine(option['shapeList'], reducedBoard) is True: 
             score += LINECLEAR
+        score += HOLE * doesCreateHole(option['shapeList'], getReducedboard(board, option['shapeList']))
+        score += HEIGHT * heightPeanlizer(option['shapeList'])
         option['score'] = score
     
     biggestOption = options[0]
@@ -610,6 +651,8 @@ def getReducedboard(board, piece):
         if x not in pieceList:
             pieceList.append(x)
 
+    # print("piecelist", pieceList)
+    pieceList.append(pieceList[-1] - 1)
     for y in range(0, len(pieceList)):
         individBoard = []
         for x in range(0, 10):
@@ -617,7 +660,7 @@ def getReducedboard(board, piece):
             individBoard.append(board[x][pieceList[y]])
         # print(individBoard)
         smolBoard.append(individBoard)
-    # print(smolBoard)
+    # print("smol", smolBoard)
     return smolBoard
 
 def runGame():
