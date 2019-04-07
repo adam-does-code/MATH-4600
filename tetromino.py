@@ -9,13 +9,14 @@ import pygame
 import sys
 from pygame.locals import *
 
-# SCORE STUFF
+# SCORE STUFF 
+#  maybe lets put these into a JSON obj so we can make them into an array n shit?
 HEIGHT = -0.5
 HOLE = -4.0
 BLOCKAGE = -6.0
 TOUCHPIECE = 0.1
 TOUCHWALL = 0.2
-TOUCHGROUND = 0.1
+TOUCHFLOOR = 0.3
 CLEARLINE = 1.2
 
 FPS = 25
@@ -183,8 +184,8 @@ def main():
         else:
             pygame.mixer.music.load('tetrisc.mid')
         # pygame.mixer.music.play(-1, 0.0)
-        runGame()
-        # runAI()
+        # runGame()
+        runAI()
         # pygame.mixer.music.stop()
         showTextScreen('Game Over')
 
@@ -219,9 +220,10 @@ def runAI():
         checkForQuit()
         # print(board)
         surfaceLevel = getSurface(board)
+        print(surfaceLevel)
         bestMovement = calculateBestMove(surfaceLevel, fallingPiece, board)
         print("BEST MOVE", bestMovement)
-        print("Actualy rotatio", fallingPiece['rotation'])
+        print("Actualy rotation", fallingPiece['rotation'])
         pyGameEvents = calculateMoves(fallingPiece, bestMovement['index'], bestMovement['rotation'])
         print(pyGameEvents)
         for event in pyGameEvents:  # event handling loop
@@ -338,7 +340,7 @@ def calculateMoves(piece, x, y):
     moves = []
     leftEvent = pygame.event.Event(2, {'scancode': 123, 'key': K_LEFT, 'unicode': u'\uf702', 'mod': 0})
     rightEvent = pygame.event.Event(pygame.KEYDOWN, {'key':pygame.K_RIGHT})
-    # spaceEvent = pygame.event.Event(2, {'scancode': 35, 'key': K_DOWN, 'unicode': u'p', 'mod': 0})
+    spaceEvent = pygame.event.Event(2, {'scancode': 35, 'key': K_DOWN, 'unicode': u'p', 'mod': 0})
     rotate = pygame.event.Event(2, {'key': K_UP})
     # print("x: %s to go: %s\n" % (piece['x'], x))
 
@@ -355,7 +357,7 @@ def calculateMoves(piece, x, y):
         for x in range(0, numRights):
             # print("RIGHT:")
             moves.append(rightEvent)
-    # moves.append(spaceEvent)
+    moves.append(spaceEvent)
     rotation = piece['rotation']
     if (rotation != y):
         moves.append(rotate)
@@ -378,117 +380,179 @@ def getSurface(board):
 
 def calculateBestMove(surface, piece, board):
     # print(piece["shape"])
-    if piece['shape'] == 'I':
-        bestMove = bestMoveI(piece, surface, board)
-        return bestMove
+    if piece['shape'] is 'I':
+        options = []
+        for idx, val in enumerate(surface):
+            if (idx <= 6 and val == surface[idx + 1] == surface[idx + 2] == surface[idx + 3]):
+                shapeList = [ (val, idx), (val, idx + 1), (val, idx + 2), (val, idx + 3)]
+                indexTo = idx - 2
+                option = { 'shapeList': shapeList,
+                        'index': indexTo,
+                        'rotation': 1,
+                        'score': 0 }
+                options.append(option)
+            shapeList = [ (val, idx), (val - 1, idx), (val - 2, idx), (val - 3, idx)]
+            indexTo = idx - 2
+            option = { 'shapeList': shapeList,
+                        'index': indexTo,
+                        'rotation': 0,
+                        'score': 0 }
+            options.append(option)
+        return getMaxScore(options, board)
+    elif piece['shape'] is 'O':
+        options = []
+        for idx, val in enumerate(surface):
+            if (val == surface[idx - 1]):
+                shapeList = [ (val, idx - 1), (val, idx), (val - 1, idx - 1), (val - 1, idx)]
+                indexTo = idx - 2
+                option = { 'shapeList': shapeList,
+                            'index': indexTo,
+                            'rotation': piece['rotation'],
+                            'score': 0 }
+                options.append(option)
+        return getMaxScore(options, board)
+    elif piece['shape'] == 'S':
+        options = []
+        for idx, val in enumerate(surface):
+            if (idx <= 7):
+                sol = (val, idx - 2)
+                shapeList = [(val, idx), (val, idx + 1), (val - 1, idx + 1), (val - 1, idx + 2)]
+                indexTo = idx - 2
+                option = { 'shapeList': shapeList,
+                            'index': indexTo,
+                            'rotation': 0,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 8 and val != 19):
+                sol = (val, idx - 2)
+                shapeList = [(val, idx), (val - 1, idx), (val, idx + 1), (val + 1, idx + 1)]  
+                indexTo = idx - 2   
+                option = { 'shapeList': shapeList,
+                            'index': indexTo,
+                            'rotation': 1,
+                            'score': 0 }
+                options.append(option)
+        print("options", options)
+        return getMaxScore(options, board)
+    elif piece['shape'] == 'T':
+        options = []
+        for idx, val in enumerate(surface):
+            if (idx <= 7 and val == surface[idx + 1] == surface[idx + 2]):
+                shapeList = [ (val, idx), (val, idx + 1), (val - 1, idx + 1), (val, idx + 2)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 1,
+                            'rotation': 0,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 8 and val == surface[idx + 1] + 1):
+                shapeList = [ (val, idx), (val - 1, idx), (val - 2, idx), (val - 1, idx + 1)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 1,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 7 and (val == surface[idx + 1] - 1 or val == surface[idx + 1] + 1)):
+                shapeList = [ (val - 1, idx), (val - 1, idx + 1), (val - 1, idx + 2), (val, idx + 1)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 2,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 8 and val == surface[idx + 1] - 1):
+                option = { 'shapeList': [(val, idx), (val - 1, idx), (val - 2, idx), (val - 1, idx - 1)],
+                            'index': idx - 2,
+                            'rotation': 3,
+                            'score': 0 }
+                options.append(option)
+        return getMaxScore(options, board)
+    elif piece['shape'] == 'Z':
+        options = []
+        for idx, val in enumerate(surface):
+            print("idx val: %s %s" % (idx, val))
+            if (idx <= 7):
+                shapeList = [(val, idx - 1), (val - 1, idx - 1), (val - 1, idx), (val - 2, idx)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 1,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 8): 
+                shapeList = [(val - 1, idx - 1), (val - 1, idx), (val, idx), (val, idx + 1)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 1,
+                            'rotation': 0,
+                            'score': 0 }
+                options.append(option)
+        return getMaxScore(options, board)
+    elif piece['shape'] == 'J':
+        options = []
+        for idx, val in enumerate(surface):
+            print("idx val: %s %s" % (idx, val))
+            if (idx <= 7):
+                shapeList = [(val, idx), (val - 1, idx), (val, idx + 1), (val, idx + 2)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 1,
+                            'rotation': 0,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 8):
+                shapeList = [(val, idx), (val - 1, idx), (val - 2, idx), (val - 2, idx + 1)] 
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 1,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 7): 
+                shapeList = [(val - 1, idx - 2), (val - 1, idx - 1), (val - 1, idx), (val, idx)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 2,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 8): 
+                shapeList = [(val, idx - 1), (val, idx), (val - 1, idx), (val - 2, idx)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 3,
+                            'score': 0 }
+                options.append(option)
+        return getMaxScore(options, board)     
+    elif piece['shape'] == 'L':
+        options = []
+        for idx, val in enumerate(surface):
+            if (idx <= 8):
+                shapeList = [ (val, idx - 2), (val, idx - 1), (val, idx), (val, idx - 1)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 0,
+                            'score': 0 }
+                options.append(option)
+                
+                shapeList = [ (val - 1, idx - 2), (val - 1, idx - 1), (val - 1, idx), (val, idx - 2)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 2,
+                            'score': 0 }
+                options.append(option)
+            if (idx <= 7):
+                shapeList = [ (val - 2, idx), (val - 1, idx), (val, idx), (val, idx + 2) ]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 1,
+                            'score': 0 }
+                options.append(option)
+                
+                shapeList = [ (val - 2, idx -1), (val -2, idx), (val - 1, idx), (val, idx)]
+                option = { 'shapeList': shapeList,
+                            'index': idx - 2,
+                            'rotation': 3,
+                            'score': 0 }
+                options.append(option)
+        return getMaxScore(options, board)     
 
 
 
-    # elif piece['shape'] == 'O':
-    #     # O shaped
-    #     options = []
-    #     for idx, val in enumerate(surface):
-    #         if (val == surface[idx - 1]):
-    #             sol = (val, idx - 2)
-    #             options.append(sol)
-    #     print("options: %s" % options)
-    #     if (len(options) is not 0):
-    #         lowest = options[0]
-    #         for i in range(len(options)):
-    #             if lowest[0] < options[i][0]:
-    #                 lowest = options[i]
-    #         print(lowest[1])
-    #         return lowest[1] 
-    # elif piece['shape'] == 'S':
-    #     options = []
-    #     for idx, val in enumerate(surface):
-    #         print("idx val: %s %s" % (idx, val))
-    #         if (piece['rotation'] == 0 and idx <= 7 and val == surface[idx + 1] == surface[idx + 2] + 1):
-    #             sol = (val, idx - 2)
-    #             options.append(sol)
-    #         elif (piece['rotation'] == 1 and idx <= 8 and val == surface[idx + 1] - 1):
-    #             sol = (val, idx - 2)
-    #             options.append(sol)
-    #     print("options", options)
-    #     if (len(options) is not 0):
-    #         lowest = options[0]
-    #         for i in range(len(options)):
-    #             if lowest[0] < options[i][0]:
-    #                 lowest = options[i]
-    #         print(lowest[1])
-    #         return lowest[1] 
-    # elif piece['shape'] == 'T':
-    #     options = []
-    #     for idx, val in enumerate(surface):
-    #         print("idx val: %s %s" % (idx, val))
-    #         if (piece['rotation'] == 0 and idx <= 7 and val == surface[idx + 1] == surface[idx + 2]):
-    #             sol = (val, idx - 1)
-    #             options.append(sol)
-    #         elif (piece['rotation'] == 1 and idx <= 8 and val == surface[idx + 1] + 1):
-    #             sol = (val, idx - 2)
-    #             options.append(sol)
-    #         elif (piece['rotation'] == 2 and idx <= 7 and (val == surface[idx + 1] - 1 or val == surface[idx + 1] + 1)) :
-    #             sol = (val, idx - 2)
-    #             options.append(sol)
-    #         elif (piece['rotation'] == 3 and idx <= 8 and val == surface[idx + 1] - 1):
-    #             sol = (val, idx - 2)
-    #             options.append(sol)
-    #     if (len(options) is not 0):
-    #         lowest = options[0]
-    #         for i in range(len(options)):
-    #             if lowest[0] < options[i][0]:
-    #                 lowest = options[i]
-    #         print(lowest[1])
-    #         return lowest[1] 
-    # elif piece['shape'] == 'Z':
-    #     options = []
-    #     for idx, val in enumerate(surface):
-    #         print("idx val: %s %s" % (idx, val))
-    #         if (piece['rotation'] == 1 and idx <= 7 and val + 1 == surface[idx + 1] == surface[idx + 2]):
-    #             sol = (val, idx - 2)
-    #             options.append(sol)
-    #         elif (piece['rotation'] == 0 and idx <= 8 and val == surface[idx + 1] + 1): 
-    #             sol = (val, idx - 1)
-    #             options.append(sol)
-    #     print("options", options)
-    #     if (len(options) is not 0):
-    #         lowest = options[0]
-    #         for i in range(len(options)):
-    #             if lowest[0] < options[i][0]:
-    #                 lowest = options[i]
-    #         print(lowest[1])
-    #         return lowest[1] 
-    # elif piece['shape'] == 'J':
-    #     options = []
-    #     for idx, val in enumerate(surface):
-    #         print("idx val: %s %s" % (idx, val))
-    #         if (piece['rotation'] == 0 and idx <= 7 and val == surface[idx + 1] == surface[idx + 2]):
-    #             sol = (val, idx - 1)
-    #             options.append(sol)
-    #         elif (piece['rotation'] == 1 and idx <= 8 and val == surface[idx + 1] + 2): 
-    #             sol = (val, idx - 2)
-    #             options.append(sol)
-    #         elif (piece['rotation'] == 2 and idx <= 7 and val == surface[idx + 1] == surface[idx + 2] - 1): 
-    #             sol = (val, idx - 1)
-    #             options.append(sol)
-    #         elif (piece['rotation'] == 3 and idx <= 8 and val == surface[idx + 1]): 
-    #             sol = (val, idx - 1)
-    #             options.append(sol)
-    #     print("options", options)
-    #     if (len(options) is not 0):
-    #         lowest = options[0]
-    #         for i in range(len(options)):
-    #             if lowest[0] < options[i][0]:
-    #                 lowest = options[i]
-    #         print(lowest[1])
-    #         return lowest[1] 
-    # elif piece['shape'] == 'L':
-    #     for idx, val in enumerate(surface):
-    #         options = []
-    #         if (idx == idx + 1 and val[idx] == val[idx + 1]):
-    #             return idx
 
-    # return random.randint(-2, 7)
 # def didCreateHole(board):
 
 def doesClearLine(piece, board):
@@ -517,36 +581,6 @@ def touchFloor(shapeList):
     if shape[0] is 19:
       return True
   return False  
-
-def bestMoveI(piece, surface, board):
-    options = []
-    for idx, val in enumerate(surface):
-        if (piece['rotation'] is 0 and idx <= 6 and val == surface[idx + 1] == surface[idx + 2] == surface[idx + 3]):
-            shapeList = [ (val, idx), (val, idx + 1), (val, idx + 2), (val, idx + 3)]
-            indexTo = idx - 2
-            option = { 'shapeList': shapeList,
-                    'index': indexTo,
-                    'rotation': piece['rotation'],
-                    'score': 0 }
-            options.append(option)
-        if (piece['rotation'] is 1):
-            shapeList = [ (val, idx), (val - 1, idx), (val - 2, idx), (val - 3, idx)]
-            indexTo = idx - 2
-            option = { 'shapeList': shapeList,
-                    'index': indexTo,
-                    'rotation': piece['rotation'],
-                    'score': 0 }
-            options.append(option)
-    return getMaxScore(options, board)
-
-  HEIGHT = -0.5
-  LINECLEAR = 1.0
-  HOLE = -4.0
-  BLOCKAGE = -6.0
-  TOUCHPIECE = 0.1
-  TOUCHWALL = 0.2
-  TOUCHFLOOR = 0.1
-  CLEARLINE = 1.2
 
 def getMaxScore(options, board):
     for option in options:
@@ -779,7 +813,7 @@ def calculateLevelAndFallFreq(score):
 def getNewPiece():
     # return a random new piece in a random rotation and color
     shape = random.choice(list(PIECES.keys()))
-    # shape = "I"
+    # shape = "L"
     # print("SHAPE %s" % shape)
     # random.randint(0, len(PIECES[shape]) - 1)
     newPiece = {'shape': shape,
