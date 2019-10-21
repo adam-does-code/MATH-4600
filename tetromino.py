@@ -1002,10 +1002,6 @@ def mutate(pop):
   pop['touchFloor'] += random.randint(-3, 3)
   pop['touchPiece'] += random.randint(-1, 1)
   pop['touchWall'] += random.randint(-1, 1)
-#   pop['hole'] -= random.randint(0, 10)
-#   pop['height'] -= random.randint(0, 10)
-#   pop['clearLine'] += random.randint(-1, 1)
-
   return pop
 
 
